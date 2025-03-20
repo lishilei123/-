@@ -4,7 +4,7 @@ import time
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
-TELEGRAM_TOKEN = '7521450072:AAGghWZrxbg3K_7aRRN-k73CzhMLiDc4DJU'
+TELEGRAM_TOKEN = 'xx：xx'
 PASSWORD = '密码'
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
