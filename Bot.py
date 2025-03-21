@@ -40,7 +40,7 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         original_path = None  # 保存原始视频文件路径
         thumbnail_path = None
         max_retries = 3
-        retry_delay = 2  # 重试等待时间（秒）
+        retry_delay = 3  # 重试等待时间（秒）
         
         for attempt in range(max_retries):
             try:
@@ -77,7 +77,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 width = video.width
                 height = video.height
                 duration = video.duration
-                mime_type = video.mime_type if video.mime_type else "未知类型"
                 file_size = video.file_size if video.file_size else 0
 
                 caption = (
@@ -105,10 +104,10 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     compress_cmd = [
                         'ffmpeg',
                         '-i', input_path,
-                        '-c:v', 'libx265',
+                        '-c:v', 'libx264',
                         '-preset', 'medium',
-                        "-vf", "eq=brightness=0.1:contrast=1.2:saturation=1.5:gamma=1.3",
-                        '-crf', '25',
+                        "-vf", "eq=brightness=0.05:contrast=1.2:saturation=1.5:gamma=1.3",
+                        '-crf', '30',
                         '-c:a', 'copy',
                         '-y',
                         compressed_path
