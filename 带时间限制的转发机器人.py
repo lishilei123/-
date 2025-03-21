@@ -1,11 +1,13 @@
 import os
 import subprocess
 import time
+import asyncio
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+import telegram.error
 
 
-TELEGRAM_TOKEN = 'xxx：xxx'
+TELEGRAM_TOKEN = 'xxx:xxx'
 PASSWORD = '密码'
 VERIFY_TIMEOUT_HOURS = 72  # 密码验证有效期（小时）
 
@@ -37,64 +39,99 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     if context.user_data.get('compress_enabled'):
         input_path = None
-        try:
-            video = update.message.video
-            video_file = await video.get_file()
-            print(video_file.file_path)
-            parts = video_file.file_path.split('/')
-            print(parts[-1])
-            input_path = f'/var/lib/docker/volumes/telegram-bot-api-data/_data/{TELEGRAM_TOKEN}/videos/{parts[-1]}'
+        thumbnail_path = None
+        max_retries = 3
+        retry_delay = 2  # 重试等待时间（秒）
+        
+        for attempt in range(max_retries):
+            try:
+                video = update.message.video
+                try:
+                    video_file = await video.get_file()
+                except telegram.error.TimedOut:
+                    if attempt < max_retries - 1:
+                        print(f"获取文件超时，等待{retry_delay}秒后重试...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        raise
+                print(f"处理视频，尝试次数：{attempt + 1}")
+                print(f"视频文件路径：{video_file.file_path}")
+                parts = video_file.file_path.split('/')
+                input_path = f'/var/lib/docker/volumes/telegram-bot-api-data/_data/{TELEGRAM_TOKEN}/videos/{parts[-1]}'
+                
+                # 等待文件写入完成
+                wait_time = 0
+                max_wait = 10  # 最大等待时间（秒）
+                while not os.path.exists(input_path) and wait_time < max_wait:
+                    await asyncio.sleep(1)
+                    wait_time += 1
+                
+                if not os.path.exists(input_path):
+                    raise FileNotFoundError(f"视频文件未找到：{input_path}")
+                
+                if not os.path.getsize(input_path):
+                    raise ValueError("视频文件大小为0")
 
-            # 直接从Telegram Video对象获取视频信息
-            width = video.width
-            height = video.height
-            duration = video.duration
-            file_name = video.file_name if video.file_name else "未知文件名"
-            mime_type = video.mime_type if video.mime_type else "未知类型"
-            file_size = video.file_size if video.file_size else 0
+                # 直接从Telegram Video对象获取视频信息
+                width = video.width
+                height = video.height
+                duration = video.duration
+                file_name = video.file_name if video.file_name else "未知文件名"
+                mime_type = video.mime_type if video.mime_type else "未知类型"
+                file_size = video.file_size if video.file_size else 0
 
-            caption = (
-                f"文件名: {file_name}\n"
-                f"时长: {duration} 秒\n"
-                f"分辨率: {width}x{height}\n"
-                f"文件类型: {mime_type}\n"
-                f"文件大小: {file_size/1024/1024:.2f} MB"
-            )
-
-            # 使用ffmpeg提取视频第一帧作为封面
-            thumbnail_path = input_path + '_thumb.jpg'
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-i', input_path,
-                '-vf', 'select=eq(n\,0)',
-                '-vframes', '1',
-                thumbnail_path
-            ]
-            subprocess.run(ffmpeg_cmd, check=True)
-
-            # 直接转发视频
-            with open(input_path, 'rb') as video_file, open(thumbnail_path, 'rb') as thumb_file:
-                await update.message.reply_video(
-                    video=InputFile(video_file),
-                    duration=duration,
-                    width=width,
-                    height=height,
-                    caption=caption,
-                    supports_streaming=True,
-                    filename=file_name,
-                    thumbnail=InputFile(thumb_file)
+                caption = (
+                    f"分辨率: {width}x{height}\n"
                 )
 
-            # 删除临时生成的封面
-            if os.path.exists(thumbnail_path):
-                os.remove(thumbnail_path)
+                # 使用ffmpeg提取视频第一帧作为封面
+                thumbnail_path = input_path + '_thumb.jpg'
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-i', input_path,
+                    '-vf', 'select=eq(n\,0)',
+                    '-vframes', '1',
+                    '-y',
+                    thumbnail_path
+                ]
+                subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
 
-        except Exception as e:
-            await update.message.reply_text(f"处理视频时出错: {e}")
-        finally:
-            if input_path and os.path.exists(input_path):
-                print(f"删除文件: {input_path}")
-                os.remove(input_path)   # 注释掉删除操作，便于调试
+                # 确保缩略图生成成功
+                if not os.path.exists(thumbnail_path) or not os.path.getsize(thumbnail_path):
+                    raise ValueError("缩略图生成失败")
+
+                # 直接转发视频
+                with open(input_path, 'rb') as video_file, open(thumbnail_path, 'rb') as thumb_file:
+                    await update.message.reply_video(
+                        video=InputFile(video_file),
+                        duration=duration,
+                        width=width,
+                        height=height,
+                        caption=caption,
+                        supports_streaming=True,
+                        filename=file_name,
+                        thumbnail=InputFile(thumb_file)
+                    )
+                    break  # 发送成功，跳出重试循环
+
+            except Exception as e:
+                error_msg = f"处理视频时出错 (尝试 {attempt + 1}/{max_retries}): {str(e)}"
+                print(error_msg)
+                
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    await update.message.reply_text(error_msg)
+            finally:
+                # 清理所有临时文件
+                if thumbnail_path and os.path.exists(thumbnail_path):
+                    print(f"删除缩略图: {thumbnail_path}")
+                    os.remove(thumbnail_path)
+                if input_path and os.path.exists(input_path):
+                    print(f"删除视频文件: {input_path}")
+                    os.remove(input_path)
 
     else:
         await update.message.reply_text('视频转发功能未启用。请发送 /start 启用该功能。')
