@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 import telegram.error
 
 
-TELEGRAM_TOKEN = 'xxx:xxxx'
+TELEGRAM_TOKEN = 'xxx:xxx'
 PASSWORD = '密码'
 VERIFY_TIMEOUT_HOURS = 72  # 密码验证有效期（小时）
 
@@ -77,7 +77,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 width = video.width
                 height = video.height
                 duration = video.duration
-                file_name = video.file_name if video.file_name else "未知文件名"
                 mime_type = video.mime_type if video.mime_type else "未知类型"
                 file_size = video.file_size if video.file_size else 0
 
@@ -101,10 +100,6 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     thumbnail_path
                 ]
                 # 如果比例大于10，进行压缩
-                #亮度（brightness） ： 用于整体提升或降低视频的亮度。 范围：-1.0（极暗）到 1.0（极亮），默认值是 0。
-                #对比度（contrast） ： 调整视频的对比度（暗部和亮部的差异）。 范围：0.0（无对比）到 2.0（最大对比），默认值是 1.0。 
-                #饱和度（saturation） ： 调整视频的色彩强度。 范围：0.0（灰度，无饱和）到 3.0（极高饱和度），默认值是 1.0。 
-                #伽马（gamma） ：调整更细致地控制暗部和亮部的亮度分布。范围：0.1 到 10.0，默认值 1.0。伽马 
                 if size_duration_ratio > 15:
                     compressed_path = input_path + '_compressed.mp4'
                     compress_cmd = [
@@ -151,8 +146,8 @@ async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         height=height,
                         caption=caption,
                         supports_streaming=True,
-                        filename=file_name,
-                        thumbnail=InputFile(thumb_file)
+                        #thumbnail=InputFile(thumb_file)
+                        cover=InputFile(thumb_file)
                     )
                     break  # 发送成功，跳出重试循环
 
