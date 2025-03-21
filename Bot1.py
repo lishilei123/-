@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 import telegram.error
 
 
-TELEGRAM_TOKEN = '7521450072:AAGghWZrxbg3K_7aRRN-k73CzhMLiDc4DJU'
+TELEGRAM_TOKEN = 'xxx:xxx'
 PASSWORD = '密码'
 VERIFY_TIMEOUT_HOURS = 72  # 密码验证有效期（小时）
 
